@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>枕木敷設シミュレーター - 終わらない重労働</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: #1a1a1a;
+            color: #fff;
+            margin: 0;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* 表示を1.25倍に拡大 */
+            font-size: 1.25rem;
+        }
+        h1 {
+            color: #ffcc00;
+            font-size: 30px; /* 24px * 1.25 */
+            margin-bottom: 8px;
+            text-shadow: 2px 2px 4px #000;
+        }
+        .subtitle {
+            font-size: 17.5px; /* 14px * 1.25 */
+            color: #aaa;
+            margin-bottom: 25px;
+        }
+        #game-container {
+            width: 100%;
+            max-width: 750px; /* 600px * 1.25 */
+            background: #2b2b2b;
+            border: 5px solid #444; /* 4px * 1.25 */
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+        .status-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 25px;
+            background: #111;
+            padding: 18px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .status-item {
+            font-size: 20px; /* 16px * 1.25 */
+        }
+        .highlight {
+            color: #ffcc00;
+        }
+        .bar-container {
+            grid-column: span 2;
+            background: #444;
+            height: 25px; /* 20px * 1.25 */
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            margin-top: 8px;
+        }
+        #stamina-bar {
+            background: linear-gradient(90deg, #ff3333, #ffcc00);
+            width: 100%;
+            height: 100%;
+            transition: width 0.1s ease;
+        }
+        .bar-label {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 15px; /* 12px * 1.25 */
+            line-height: 25px;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #stage-visual {
+            height: 150px; /* 120px * 1.25 */
+            background: #3a2e2b;
+            border: 3px solid #555;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .rail-line {
+            position: absolute;
+            width: 100%;
+            height: 5px; /* 4px * 1.25 */
+            background: #777;
+            top: 50px; /* 40px * 1.25 */
+        }
+        .rail-line.bottom {
+            top: 100px; /* 80px * 1.25 */
+        }
+        #placed-ties {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding-left: 25px;
+        }
+        .tie {
+            width: 19px; /* 15px * 1.25 */
+            height: 88px; /* 70px * 1.25 */
+            background: #5c4033;
+            border: 1px solid #3d2b22;
+            margin-right: 19px;
+            position: relative;
+        }
+        .tie.building {
+            background: #8b5a2b;
+            animation: blink 0.5s infinite alternate;
+        }
+        @keyframes blink {
+            from { opacity: 0.5; }
+            to { opacity: 1; }
+        }
+        .spike {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            background: #ccc;
+            left: 6px;
+        }
+        .spike.top { top: 12px; }
+        .spike.bottom { bottom: 12px; }
+        
+        #action-panel {
+            text-align: center;
+        }
+        .instruction {
+            font-size: 19px; /* 15px * 1.25 */
+            margin-bottom: 18px;
+            color: #ddd;
+            min-height: 55px;
+        }
+        .btn {
+            background: linear-gradient(180deg, #ffcc00, #cc9900);
+            color: #000;
+            border: none;
+            padding: 18px 38px;
+            font-size: 22px; /* 18px * 1.25 */
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #997300;
+            transition: transform 0.05s, box-shadow 0.05s;
+            width: 100%;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #997300;
+        }
+        .btn:disabled {
+            background: #555;
+            color: #888;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #log-panel {
+            margin-top: 25px;
+            background: #111;
+            border: 1px solid #444;
+            height: 125px; /* 100px * 1.25 */
+            overflow-y: auto;
+            padding: 12px;
+            font-size: 15px; /* 12px * 1.25 */
+            font-family: monospace;
+            color: #00ff00;
+            text-align: left;
+            border-radius: 6px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px dashed #222;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>枕木敷設シミュレーター</h1>
+    <div class="subtitle">〜 鉄道インフラを支える、終わりなき重労働の記録 〜</div>
+
+    <div id="game-container">
+        <!-- ステータス表示 -->
+        <div class="status-panel">
+            <div class="status-item">敷設完了: <span id="ties-count" class="highlight">0</span> 本</div>
+            <div class="status-item">総作業量: <span id="total-clicks" class="highlight">0</span> 歩/打</div>
+            <div class="bar-container">
+                <div class="bar-label">作業員のスタミナ: <span id="stamina-text">100</span>%</div>
+                <div id="stamina-bar"></div>
+            </div>
+        </div>
+
+        <!-- 視覚効果エリア -->
+        <div id="stage-visual">
+            <div class="rail-line"></div>
+            <div class="rail-line bottom"></div>
+            <div id="placed-ties">
+                <!-- 動的に枕木が追加されます -->
+            </div>
+        </div>
+
+        <!-- アクションエリア -->
+        <div id="action-panel">
+            <div id="instruction" class="instruction">【フェーズ 1】運搬<br>重さ100kgの枕木を担ぎ、敷設現場まで運び込め！（連打）</div>
+            <button id="action-btn" class="btn">枕木を担いで運ぶ！</button>
+        </div>
+
+        <!-- 労働ログ -->
+        <div id="log-panel">
+            <div class="log-entry">[08:00] 炎天下の中、本日の枕木敷設作業を開始する。1本の敷設に莫大なエネルギーが必要だ。</div>
+        </div>
+    </div>
+
+    <script>
+        // ゲーム状態
+        let tiesPlaced = 0;
+        let totalClicks = 0;
+        let stamina = 100;
+        
+        // フェーズ管理: 0=運搬(15回), 1=設置(10回), 2=犬釘打ち(20回)
+        let currentPhase = 0; 
+        let phaseProgress = 0;
+        
+        const phaseConfigs = [
+            { name: "運搬", target: 15, text: "【フェーズ 1】運搬<br><span style='color:#ff6666;'>【重労働】</span>100kgの枕木を肩に食い込ませて運べ！", btnText: "泥まみれで運ぶ（連打！）", staminaCost: 2 },
+            { name: "設置", target: 10, text: "【フェーズ 2】位置調整<br>ミリ単位のズレも許されない。バールで枕木を微調整しろ！", btnText: "腰を痛めながら位置を直す", staminaCost: 1.5 },
+            { name: "犬釘打ち", target: 20, text: "【フェーズ 3】犬釘固定<br>巨大なハンマーを振り下ろし、レールに釘を叩き込め！", btnText: "ハンマーを振り下ろす！", staminaCost: 3 }
+        ];
+
+        // DOM要素
+        const tiesCountEl = document.getElementById("ties-count");
+        const totalClicksEl = document.getElementById("total-clicks");
+        const staminaBar = document.getElementById("stamina-bar");
+        const staminaText = document.getElementById("stamina-text");
+        const instructionEl = document.getElementById("instruction");
+        const actionBtn = document.getElementById("action-btn");
+        const logPanel = document.getElementById("log-panel");
+        const placedTiesContainer = document.getElementById("placed-ties");
+
+        // ログ追加関数
+        function addLog(message) {
+            const entry = document.createElement("div");
+            entry.className = "log-entry";
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            entry.innerText = `[${time}] ${message}`;
+            logPanel.appendChild(entry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+        }
+
+        // スタミナ回復＆ペナルティ処理
+        setInterval(() => {
+            if (stamina < 100) {
+                stamina = Math.min(100, stamina + 0.5);
+                updateStaminaDOM();
+            }
+            if (stamina <= 0) {
+                actionBtn.disabled = true;
+                actionBtn.innerText = "ハァ…ハァ…（疲労困憊で動けない…）";
+                instructionEl.innerHTML = "<span style='color:#ff3333; font-weight:bold;'>【警告】極度の疲労！</span><br>数秒間休んでスタミナが回復するのを待ってください…";
+                setTimeout(() => {
+                    stamina = 20;
+                    updateStaminaDOM();
+                    actionBtn.disabled = false;
+                    updatePhaseUI();
+                }, 3000);
+            }
+        }, 500);
+
+        function updateStaminaDOM() {
+            staminaBar.style.width = `${stamina}%`;
+            staminaText.innerText = Math.floor(stamina);
+            if(stamina < 30) {
+                staminaBar.style.background = "#ff3333";
+            } else {
+                staminaBar.style.background = "linear-gradient(90deg, #ff3333, #ffcc00)";
+            }
+        }
+
+        function updatePhaseUI() {
+            const config = phaseConfigs[currentPhase];
+            instructionEl.innerHTML = `${config.text} <br>（進捗: ${phaseProgress} / ${config.target}）`;
+            actionBtn.innerText = config.btnText;
+        }
+
+        // ビジュアル更新
+        function refreshVisuals() {
+            placedTiesContainer.innerHTML = "";
+            // 固定された枕木
+            for(let i = 0; i < tiesPlaced; i++) {
+                const tie = document.createElement("div");
+                tie.className = "tie";
+                const spikeTop = document.createElement("div");
+                spikeTop.className = "spike top";
+                const spikeBottom = document.createElement("div");
+                spikeBottom.className = "spike bottom";
+                tie.appendChild(spikeTop);
+                tie.appendChild(spikeBottom);
+                placedTiesContainer.appendChild(tie);
+            }
+            // 現在作成中の枕木
+            if (currentPhase > 0 || phaseProgress > 0) {
+                const currentTie = document.createElement("div");
+                currentTie.className = "tie building";
+                if (currentPhase === 2 && phaseProgress > 5) {
+                    const spikeTop = document.createElement("div");
+                    spikeTop.className = "spike top";
+                    currentTie.appendChild(spikeTop);
+                }
+                placedTiesContainer.appendChild(currentTie);
+            }
+        }
+
+        // メインクリックイベント
+        actionBtn.addEventListener("click", () => {
+            if (stamina <= 0) return;
+            totalClicks++;
+            totalClicksEl.innerText = totalClicks;
+            const config = phaseConfigs[currentPhase];
+            phaseProgress++;
+            stamina = Math.max(0, stamina - config.staminaCost);
+            updateStaminaDOM();
+
+            // ログの演出
+            if (totalClicks % 7 === 0) {
+                const fatigueLogs = [
+                    "汗が目に入って痛い。容赦ない直射日光が体力を削る。",
+                    "腰に鋭い痛みが走る。しかし手を止めることは許されない。",
+                    "安全靴の中が汗でグショグショだ。",
+                    "重量物の連続挙動で、腕の筋肉が痙攣し始めている。",
+                    "1本設置するだけでこの騒ぎだ。線路は何キロメートルも続いている…"
+                ];
+                addLog(fatigueLogs[Math.floor(Math.random() * fatigueLogs.length)]);
+            }
+
+            // フェーズ完了チェック
+            if (phaseProgress >= config.target) {
+                phaseProgress = 0;
+                currentPhase++;
+                if (currentPhase >= phaseConfigs.length) {
+                    // 1本敷設完了！
+                    tiesPlaced++;
+                    tiesCountEl.innerText = tiesPlaced;
+                    currentPhase = 0;
+                    addLog(`🎉 【重労働の成果】枕木 第 ${tiesPlaced} 本目の敷設が完了！しかし、次の1本が待っている…`);
+                } else {
+                    addLog(`【進行】${config.name}作業が終了。次の「${phaseConfigs[currentPhase].name}」へ移行。`);
+                }
+                refreshVisuals();
+            }
+
+            if (stamina > 0) {
+                updatePhaseUI();
+            }
+        });
+
+        // 初期化
+        updatePhaseUI();
+        refreshVisuals();
+    </script>
+</body>
+</html>
