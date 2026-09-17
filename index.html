@@ -216,7 +216,7 @@
 
         <!-- アクションエリア -->
         <div id="action-panel">
-            <div id="instruction" class="instruction">【フェーズ 1】運搬<br>重さ100kgの枕木を担ぎ、敷設現場まで運び込め！（連打）</div>
+            <div id="instruction" class="instruction">【フェーズ 1】運搬<br>重さ100kgの枕木を担ぎ、敷設現場まで運び込め！（長押し対応）</div>
             <button id="action-btn" class="btn">枕木を担いで運ぶ！</button>
         </div>
 
@@ -237,7 +237,7 @@
         let phaseProgress = 0;
         
         const phaseConfigs = [
-            { name: "運搬", target: 15, text: "【フェーズ 1】運搬<br><span style='color:#ff6666;'>【重労働】</span>100kgの枕木を肩に食い込ませて運べ！", btnText: "泥まみれで運ぶ（連打！）", staminaCost: 2 },
+            { name: "運搬", target: 15, text: "【フェーズ 1】運搬<br><span style='color:#ff6666;'>【重労働】</span>100kgの枕木を肩に食い込ませて運べ！", btnText: "泥まみれで運ぶ（長押しで進行）", staminaCost: 2 },
             { name: "設置", target: 10, text: "【フェーズ 2】位置調整<br>ミリ単位のズレも許されない。バールで枕木を微調整しろ！", btnText: "腰を痛めながら位置を直す", staminaCost: 1.5 },
             { name: "犬釘打ち", target: 20, text: "【フェーズ 3】犬釘固定<br>巨大なハンマーを振り下ろし、レールに釘を叩き込め！", btnText: "ハンマーを振り下ろす！", staminaCost: 3 }
         ];
@@ -252,6 +252,10 @@
         const logPanel = document.getElementById("log-panel");
         const placedTiesContainer = document.getElementById("placed-ties");
 
+        // 長押し・連打用変数
+        let isHolding = false;
+        let holdInterval = null;
+
         // ログ追加関数
         function addLog(message) {
             const entry = document.createElement("div");
@@ -262,13 +266,14 @@
             logPanel.scrollTop = logPanel.scrollHeight;
         }
 
-        // スタミナ回復＆ペナルティ処理
+        // スタミナ回復＆ペナルティ処理（回復速度を半分に：0.5 → 0.25）
         setInterval(() => {
             if (stamina < 100) {
-                stamina = Math.min(100, stamina + 0.5);
+                stamina = Math.min(100, stamina + 0.25);
                 updateStaminaDOM();
             }
             if (stamina <= 0) {
+                stopHold(); // スタミナ切れ時は長押しを強制停止
                 actionBtn.disabled = true;
                 actionBtn.innerText = "ハァ…ハァ…（疲労困憊で動けない…）";
                 instructionEl.innerHTML = "<span style='color:#ff3333; font-weight:bold;'>【警告】極度の疲労！</span><br>数秒間休んでスタミナが回復するのを待ってください…";
@@ -325,9 +330,9 @@
             }
         }
 
-        // メインクリックイベント
-        actionBtn.addEventListener("click", () => {
-            if (stamina <= 0) return;
+        // 1回分の作業アクションを実行する関数
+        function performAction() {
+            if (stamina <= 0 || actionBtn.disabled) return;
             totalClicks++;
             totalClicksEl.innerText = totalClicks;
             const config = phaseConfigs[currentPhase];
@@ -365,6 +370,57 @@
 
             if (stamina > 0) {
                 updatePhaseUI();
+            } else {
+                stopHold();
+            }
+        }
+
+        // 長押し開始処理
+        function startHold() {
+            if (isHolding || stamina <= 0 || actionBtn.disabled) return;
+            isHolding = true;
+            performAction(); // すぐに1回実行
+            // 進行スピードを半分に（間隔を 120ms から 240ms に変更）
+            holdInterval = setInterval(() => {
+                if (stamina <= 0) {
+                    stopHold();
+                } else {
+                    performAction();
+                }
+            }, 240);
+        }
+
+        // 長押し終了処理
+        function stopHold() {
+            isHolding = false;
+            if (holdInterval) {
+                clearInterval(holdInterval);
+                holdInterval = null;
+            }
+        }
+
+        // --- イベントリスナー設定 ---
+        // マウスおよびタッチ操作
+        actionBtn.addEventListener("mousedown", startHold);
+        window.addEventListener("mouseup", stopHold);
+
+        actionBtn.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            startHold();
+        });
+        window.addEventListener("touchend", stopHold);
+
+        // スペースキー長押し対応
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space" && !e.repeat) {
+                e.preventDefault(); // ページのスクロールを防止
+                startHold();
+            }
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "Space") {
+                stopHold();
             }
         });
 
